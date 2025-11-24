@@ -1,26 +1,27 @@
 # NAVI RAG Search Agent 🧭  
 한국인터넷진흥원(KISA) 규정 문서 기반 사내 업무 지원 RAG 챗봇
 
-> 대규모 규정·지침·지침서 PDF를 벡터화하고,  
-> 사내 직원의 질의를 RAG 파이프라인으로 처리해 **실무에 바로 쓸 수 있는 답변**을 제공하는 AI 검색 에이전트입니다.
+> 대규모 규정·지침·규칙 PDF를 벡터화하고,  
+> 사내 직원의 질의를 RAG 파이프라인으로 처리해  
+> **실무에서 바로 활용 가능한 답변**을 제공하는 문서 기반 AI 검색 에이전트입니다.
 
 ---
 
 ## 1. 프로젝트 개요
 
-한국인터넷진흥원(KISA)의 정관, 규정, 규칙, 지침, 서식류 등 수백 개의 PDF 문서를 대상으로
+한국인터넷진흥원(KISA)의 정관, 규정, 규칙, 지침, 서식류 등 수백 개의 PDF 문서를 기반으로:
 
 - “어떤 규정의 몇 조에 이런 내용이 있나요?”
-- “출장비와 관련된 양식 서류 뭐 써야 하죠?”
-- “안전보건관리규정에서 작업중지 관련 조항 찾아줘”
+- “출장비 관련 양식을 알려줘.”
+- “안전보건관리규정에서 작업중지 관련 조항 찾아줘.”
 
-와 같은 실무성 높은 질문을 하면,
+와 같은 실무 중심 질문에 대해,
 
-> **LLM + RAG 파이프라인 + Qdrant 벡터 DB**를 이용해  
-> 관련 조항과 근거 문서를 함께 반환하는 검색 챗봇입니다.
+> **LLM + RAG 파이프라인 + Qdrant 벡터 DB**를 통해  
+> 관련 조항과 출처 문서를 함께 반환합니다.
 
-이 레포는 기존 팀 프로젝트(SKN13-FINAL-6Team) 중  
-**문서 검색 / RAG 에이전트 기능을 중심으로 재구성한 버전**입니다.
+이 레포는 SKN13-FINAL-6Team 프로젝트 중  
+**문서 검색 / RAG 에이전트 기능만 모아 리팩토링한 독립 버전**입니다.
 
 ---
 
@@ -28,74 +29,69 @@
 
 ### 🔎 규정 문서 RAG 검색
 
-- `documents_kisa_pdf` 하위의 정관/규정/규칙/지침 PDF 전체를 벡터화
-- 파일명 규칙을 이용해 **문서 유형·도메인 메타데이터 자동 부여**
-  - 예: `2_05_인사규정(240221).pdf`
-    - `2` → 규정
-    - `05` → 인사 도메인
-- 사용자의 자연어 질문을 벡터 검색 + 재랭킹 후, LLM으로 최종 답변 생성
-- **출처 문서/페이지 정보**를 함께 반환해 신뢰성 확보
+- `documents_kisa_pdf` 하위 PDF 전체 벡터화
+- 파일명 규칙을 기반으로 문서 유형, 도메인 자동 추출  
+  예: `2_05_인사규정(240221).pdf`  
+  - `2` → 규정  
+  - `05` → 인사 도메인
+- 자연어 질문 → 벡터 검색 → 재랭킹 → LLM 최종 응답
+- **출처 문서/페이지 정보 포함**
 
 ### 🧾 서식/양식(Form) 특화 검색
 
-- `documents_kisa_pdf/forms_extracted_v6` 폴더의 각종 신청서/확인서/양식 문서를 별도 인덱싱
-- “○○신청서 양식”, “○○확인서 서식” 등 **양식 관련 질의**는 일반 규정이 아니라  
-  **form 문서 컬렉션만 타겟팅해서 검색**
-- `backend/analyze_form_patterns.py`로 form 문서 패턴 분석, form 전용 검색 로직에 활용
+- `documents_kisa_pdf/forms_extracted_v6` 폴더의 신청서·확인서 등 양식 문서 별도 인덱싱
+- 양식(Form) 관련 질의는 일반 규정이 아닌  
+  **form 전용 컬렉션만 타겟팅**
+- `analyze_form_patterns.py` 기반 form 패턴 분석 및 매칭
 
-### 🧠 RAG 파이프라인 구조
+### 🧠 RAG 파이프라인 구성 요소
 
-- `backend/chatbot/services/rag_indexer.py`
-  - PDF → 텍스트 추출
-  - 청크 분할(길이/오버랩)
-  - 메타데이터(문서 유형, 도메인, 파일명, 페이지 등) 부착
-  - Qdrant 컬렉션에 업로드
+#### `rag_indexer.py`
+- PDF → 텍스트 → 청크 분할  
+- 메타데이터(문서유형/도메인/페이지 등) 부착  
+- Qdrant 컬렉션 업로드  
 
-- `backend/chatbot/services/rag_search.py`
-  - 사용자의 질의(q)를 벡터화
-  - Qdrant에서 관련 문서 Top-k 검색
-  - form 관련 질의 여부에 따라 **일반 규정 / form 문서 컬렉션 분기 처리**
+#### `rag_search.py`
+- 사용자 질문 벡터화  
+- Qdrant에서 Top-k 검색  
+- form 관련 여부에 따라 **두 컬렉션 분기 처리**  
 
-- `backend/chatbot/services/pipeline.py`
-  - 검색된 문서들을 컨텍스트로 묶어 LLM에 전달
-  - `config/system_prompt.md`, `config/user_prompt.md`에 분리된 프롬프트를 로드
-  - 최종 Answer + 출처 정보 구조화
+#### `pipeline.py`
+- 검색 문서를 LLM 컨텍스트로 조합  
+- `system_prompt.md`, `user_prompt.md` 로드  
+- 최종 답변 + 출처 구조화  
 
-- `backend/chatbot/services/answerer.py`
-  - LLM 호출 래핑
-  - 답변 포맷팅, 마크다운 변환, 강조/목록 처리 등 후처리 담당
+#### `answerer.py`
+- LLM 호출 래핑  
+- 마크다운 포맷팅, 문장 다듬기, 강조 처리  
 
-- `backend/chatbot/services/constants.py`, `filters.py`, `keyword_extractor.py`
-  - 컬렉션 이름, 메타데이터 키, 질의 패턴 기반 필터링/라우팅 로직 정의
-
-- `backend/test_enhanced_rag.py`
-  - RAG 검색 품질을 스크립트로 테스트/검증
+#### 기타 구성
+- `constants.py`: 컬렉션/메타데이터 키 상수  
+- `filters.py`: 문서 유형·도메인 기반 필터링  
+- `keyword_extractor.py`: 키워드 분석해 라우팅 판단  
+- `test_enhanced_rag.py`: 검색 품질 테스트 스크립트
 
 ---
 
 ## 3. 기술 스택
 
 ### Backend
-
-- Python 3.x  
-- Django, Django REST Framework 기반 앱 구조(`chatbot`, `qdrant` 등)  
-- Qdrant (Vector DB 클라이언트 래퍼)  
+- Python 3.12
+- Django REST Framework  
+- Qdrant Vector DB  
 
 ### AI / RAG
+- OpenAI GPT 계열 (GPT-4o-mini 등)  
+- Embedding: `text-embedding-3-large`  
+- Custom RAG Pipeline 전면 커스텀 구현
 
-- OpenAI GPT 계열 (예: GPT-4o-mini)  
-- Embedding 모델: `text-embedding-3-large`  
-- 커스텀 RAG 파이프라인
-  - 문서 파서, 인덱서, 서치 엔진, 파이프라인 직접 구현
-
-### Infra / 기타
-
-- (원본 프로젝트 기준) Docker, Docker Compose, Nginx  
-- 프론트엔드는 별도 레포/배포(예: Vercel)에서 React + Vite + Tailwind로 구현 가능
+### Infra
+- Docker, Docker Compose, Nginx  
+- Frontend는 별도 레포(예: Vercel)에서 React + Vite + Tailwind 활용 가능
 
 ---
 
-## 4. 폴더 구조 (RAG 관련 중심)
+## 4. 폴더 구조
 
 ```bash
 NAVI-RAG-SEARCH-AGENT/
@@ -145,3 +141,96 @@ NAVI-RAG-SEARCH-AGENT/
 │   └── 4_03_교육훈련지침(240201).pdf
 │
 └── README.md
+```
+
+## 5. 로컬 환경에서 RAG 테스트 방법
+
+로컬에서 **Qdrant + Django RAG 파이프라인**을 테스트하기 위한 최소 실행 가이드입니다.
+
+---
+
+### 5-1. Qdrant 실행 (Docker 사용)
+
+```bash
+docker run -p 6333:6333 -p 6334:6334 \
+    -v qdrant_storage:/qdrant/storage \
+    qdrant/qdrant
+```
+
+정상 실행되면 브라우저에서 확인이 가능합니다.
+
+### 5-2. 문서 임베딩 (규정/지침/양식 PDF 업로드)
+```bash
+python backend/embed_documents.py
+```
+
+실행 결과:
+
+- 모든 PDF가 텍스트 추출 → 청크화 → 임베딩 생성 → Qdrant에 업로드
+- 규정/규칙/지침 문서는 규정 컬렉션
+- 양식류(form) 문서는 form 컬렉션으로 자동 분류
+
+## 6. Django 기반 RAG 검색 테스트
+### 6-1. 테스트 스크립트 실행
+```python 
+python backend/test_enhanced_rag.py
+```
+
+예시 출력 (샘플):
+
+[QUESTION] 출장비 관련 양식 뭐 써야 해?
+[TOP_K RESULTS] 5개 문서 매칭됨
+[FORM DETECTED] form 컬렉션에서 검색
+[FINAL ANSWER]
+- 제출 서류: 출장신청서, 출장복명서
+- 서식 위치: forms_extracted_v6/…
+- 관련 규정: 인사관리규칙 제○조
+
+## 7. 프론트엔드 (Vercel 배포)와 API 연동
+
+프론트엔드는 React + Vite + Tailwind 기반.
+API 엔드포인트는 Django REST 기준:
+
+```bash
+POST /api/chat/query/
+``` 
+
+요청 예시:
+
+```bash
+{
+  "query": "출장비 신청은 어떤 서류가 필요해?"
+}
+```
+
+응답 예시:
+```bash
+{
+  "answer": "출장비 신청에는 출장신청서와 출장복명서가 필요합니다.",
+  "sources": [
+    {
+      "document": "인사관리규칙",
+      "page": 12
+    }
+  ]
+}
+```
+
+Vercel 프론트 코드 예시:
+```bash
+const res = await fetch(`${API_URL}/api/chat/query/`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ query }),
+});
+```
+
+## 8. 실행 순서 요약
+1) Qdrant 실행
+docker run -p 6333:6333 qdrant/qdrant
+
+2) 문서 임베딩
+python backend/embed_documents.py
+
+3) Django 서버 실행
+python manage.py runserver
