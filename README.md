@@ -150,14 +150,19 @@ NAVI-RAG-SEARCH-AGENT/
 ---
 
 ### 5-1. Qdrant 실행 (Docker 사용)
-
 ```bash
 docker run -p 6333:6333 -p 6334:6334 \
     -v qdrant_storage:/qdrant/storage \
     qdrant/qdrant
 ```
-
 정상 실행되면 브라우저에서 확인이 가능합니다.
+
+### 5-1-1. 빠른 테스트용(데모버전)
+```bash
+docker run -p 6333:6333 qdrant/qdrant
+```
+실행은 되어서 dashboard는 켜지지만, 재시작시 벡터가 초기화됩니다.
+
 
 ### 5-2. 문서 임베딩 (규정/지침/양식 PDF 업로드)
 ```bash
@@ -178,6 +183,7 @@ python backend/test_enhanced_rag.py
 
 예시 출력 (샘플):
 
+```bash
 [QUESTION] 출장비 관련 양식 뭐 써야 해?
 [TOP_K RESULTS] 5개 문서 매칭됨
 [FORM DETECTED] form 컬렉션에서 검색
@@ -185,6 +191,7 @@ python backend/test_enhanced_rag.py
 - 제출 서류: 출장신청서, 출장복명서
 - 서식 위치: forms_extracted_v6/…
 - 관련 규정: 인사관리규칙 제○조
+```
 
 ## 7. 프론트엔드 (Vercel 배포)와 API 연동
 
@@ -227,10 +234,14 @@ const res = await fetch(`${API_URL}/api/chat/query/`, {
 
 ## 8. 실행 순서 요약
 1) Qdrant 실행
+```bash 
 docker run -p 6333:6333 qdrant/qdrant
-
+```
 2) 문서 임베딩
+```bash 
 python backend/embed_documents.py
-
+```
 3) Django 서버 실행
+```python
 python manage.py runserver
+```
